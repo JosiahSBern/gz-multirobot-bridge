@@ -1,0 +1,45 @@
+# Linux host assumed (host networking keeps DDS + gz-transport simple).
+# GUI:      xhost +local:docker && docker compose run --rm dev
+# NVIDIA:   docker compose --profile gpu run --rm dev-gpu   (needs nvidia-container-toolkit)
+# Headless: docker compose run --rm headless gz sim -s -r --headless-rendering worlds/amazon_warehouse.sdf
+services:
+  dev: &dev
+    build: { context: ., dockerfile: docker/Dockerfile }
+    image: gz_fleet_bridge:jazzy
+    network_mode: host
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - .:/home/ubuntu/gz_fleet_bridge
+      - ws_build:/home/ubuntu/ws        # colcon build/install/log live here, not in the repo
+    devices:
+      - /dev/dri:/dev/dri               # Intel/AMD GPU for rendering
+
+  dev-gpu:
+    <<: *dev
+    profiles: [gpu]
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  headless:
+    <<: *dev
+    profiles: [headless]
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+    devices: []
+
+volumes:
+  ws_build:
